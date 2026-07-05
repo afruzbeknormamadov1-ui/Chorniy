@@ -1,1 +1,99 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omad Barabani</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: #fff; padding: 20px; margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; }
+        h2 { margin-bottom: 20px; font-size: 24px; color: #ffcc00; }
+        #canvas-container { position: relative; width: 320px; height: 320px; margin-bottom: 30px; }
+        #canvas { display: block; background: #222; border-radius: 50%; border: 5px solid #ffcc00; }
+        #pointer { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 25px solid #ffcc00; z-index: 10; }
+        button { padding: 15px 40px; font-size: 20px; cursor: pointer; background: #ffcc00; color: #000; border: none; border-radius: 30px; font-weight: bold; box-shadow: 0 4px 15px rgba(255, 204, 0, 0.4); transition: 0.2s; }
+        button:disabled { background: #555; color: #aaa; box-shadow: none; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h2>Sonli Omad Barabani</h2>
+    <div id="canvas-container">
+        <div id="pointer"></div>
+        <canvas id="canvas" width="320" height="320"></canvas>
+    </div>
+    <button id="spinBtn" onclick="spin()">Aylantirish!</button>
 
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // 1 dan 14 gacha sonlar
+        const prizes = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"];
+        const colors = ["#FF5733", "#33FF57", "#3357FF", "#F3FF33", "#FF33F3", "#33FFF0", "#FFA500", "#8A2BE2", "#00FF7F", "#D2691E", "#FF1493", "#00FFFF", "#FFD700", "#ADFF2F"];
+        
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const numSectors = prizes.length;
+        const arc = Math.PI / (numSectors / 2);
+        let startAngle = 0;
+
+        function drawWheel() {
+            ctx.clearRect(0,0,320,320);
+            for (let i = 0; i < numSectors; i++) {
+                const angle = startAngle + i * arc;
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.beginPath();
+                ctx.moveTo(160, 160);
+                ctx.arc(160, 160, 155, angle, angle + arc);
+                ctx.lineTo(160, 160);
+                ctx.fill();
+                ctx.strokeStyle = "#222";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.save();
+                ctx.fillStyle = "#fff";
+                ctx.translate(160, 160);
+                ctx.rotate(angle + arc / 2);
+                ctx.textAlign = "right";
+                ctx.font = "bold 16px sans-serif";
+                ctx.fillText(prizes[i], 135, 6);
+                ctx.restore();
+            }
+        }
+        drawWheel();
+
+        function spin() {
+            document.getElementById("spinBtn").disabled = true;
+            let spinAngleStart = Math.random() * 10 + 15;
+            let spinTime = 0;
+            let spinTimeTotal = Math.random() * 3000 + 4000;
+
+            function rotateWheel() {
+                spinTime += 30;
+                if (spinTime >= spinTimeTotal) {
+                    stopRotate();
+                    return;
+                }
+                let spinAngle = spinAngleStart - (spinTime / spinTimeTotal) * spinAngleStart;
+                startAngle += (spinAngle * Math.PI / 180);
+                drawWheel();
+                setTimeout(rotateWheel, 30);
+            }
+            rotateWheel();
+        }
+
+        function stopRotate() {
+            const degrees = startAngle * 180 / Math.PI + 90;
+            const arcd = arc * 180 / Math.PI;
+            const index = Math.floor((360 - (degrees % 360)) / arcd);
+            const winner = prizes[(index + numSectors) % numSectors];
+            
+            setTimeout(() => {
+                tg.sendData(winner);
+                tg.close();
+            }, 1500);
+        }
+    </script>
+</body>
+</html>
