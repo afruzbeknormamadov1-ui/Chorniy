@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 import random
 import pg8000
 import os
+from flask import Flask
 from threading import Thread
-from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Bot tokeni
 API_TOKEN = '8935181978:AAEPXusfIVG-z_ype7F1pZn_uKTUmwpJE8U'
@@ -17,19 +17,16 @@ DB_PASS = "ynIn8Lmdg5IhvIschwTWB0HcopjhHcl3"
 DB_HOST = "dpg-d95u5jojs32c738e5uig-a.oregon-postgres.render.com"
 DB_NAME = "baraban_baza"
 
-# Render uchun soxta Web Server (Render port so'rab o'chiravermasligi uchun)
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"Bot is alive!")
+# Render port talab qilgani uchun Flask server
+app = Flask('')
 
-def run_health_server():
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-    print(f"Health check server {port}-portda ishlamoqda...")
-    server.serve_forever()
+    app.run(host='0.0.0.0', port=port)
 
 def get_db_connection():
     return pg8000.connect(
@@ -136,13 +133,11 @@ def handle_web_app_data(message):
     bot.send_message(message.chat.id, f"🎉 Tabriklaymiz! Sizga mutlaqo noyob bo'lgan **{chiqqan_son}** raqami tushdi!")
 
 if __name__ == '__main__':
-    # Bazani tayyorlash
     init_db()
     
-    # Render port yopib qo'ymasligi uchun serverni alohida oqimda yoqamiz
-    server_thread = Thread(target=run_health_server)
-    server_thread.daemon = True
-    server_thread.start()
+    # Flask portini ochish
+    t = Thread(target=run_flask)
+    t.start()
     
     print("Bot muvaffaqiyatli ishga tushdi...")
     bot.polling(none_stop=True)
