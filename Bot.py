@@ -9,8 +9,8 @@ import psycopg2
 API_TOKEN = '8935181978:AAEPXusfIVG-z_ype7F1pZn_uKTUmwpJE8U'
 bot = telebot.TeleBot(API_TOKEN)
 
-# Render'dagi Postgres Baza havolasi (Buni Render'dan olib joylaymiz)
-DATABASE_URL = os.environ.get('DATABASE_URL')
+# Sizning Render'dagi Postgres baza havolangiz (To'g'ridan-to'g'ri kod ichiga ulandi)
+DATABASE_URL = "postgresql://baraban_baza_user:ynIn8Lmdg5IhvIschwTWB0HBbNnO0eMh@dpg-d95u5jojs32c738e5uig-a.oregon-postgres.render.com/baraban_baza?sslmode=require"
 
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL, sslmode='require')
@@ -44,8 +44,8 @@ def init_db():
     cursor.close()
     conn.close()
 
-# 720 soatlik cheklov (soatda)
-COOLDOWN_HOURS = 720
+# 24 soatlik cheklov
+COOLDOWN_HOURS = 24
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -98,7 +98,7 @@ def handle_web_app_data(message):
         cursor.execute('SELECT num FROM available_numbers')
         numbers = [r[0] for r in cursor.fetchall()]
 
-    # 3. Tasodifiy bitta raqamni tanlash (Barabandan nima chiqishidan qat'iy nazar, bazadagi bor raqam beriladi)
+    # 3. Tasodifiy bitta raqamni tanlash
     chiqqan_son = random.choice(numbers)
     
     # 4. Tanlangan raqamni bazadan o'chirish
@@ -119,7 +119,7 @@ def handle_web_app_data(message):
         for i in range(1, 15):
             cursor.execute('INSERT INTO available_numbers (num) VALUES (%s)', (i,))
         conn.commit()
-        bot.send_message(message.chat.id, "📢 Diqqat! Hamma 14 ta raqam tarqatib bo'lindi. O'yin yangidan boshlandi!")
+        bot.send_message(message.chat.id, "📢 Diqqat! Hamma 14 ta raqam tarqatib bo'lindi. O'yin avtomatik ravishda yangidan boshlandi!")
 
     cursor.close()
     conn.close()
@@ -128,5 +128,5 @@ def handle_web_app_data(message):
 
 if __name__ == '__main__':
     init_db()
-    print("Bot ishga tushdi...")
+    print("Bot muvaffaqiyatli ishga tushdi...")
     bot.polling(none_stop=True)
