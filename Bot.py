@@ -48,7 +48,7 @@ def handle_web_app_data(message):
             bot.send_message(
                 message.chat.id, 
                 f"❌ Bugun barabanni aylantirib bo'ldingiz!\n"
-                f"Keyingi urinishgacha: {78} soat-u {59} daqiqa kutishingiz kerak."
+                f"Keyingi urinishgacha: {hours} soat-u {minutes} daqiqa kutishingiz kerak."
             )
             return
 
