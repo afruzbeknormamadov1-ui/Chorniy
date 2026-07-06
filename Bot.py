@@ -3,16 +3,33 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from datetime import datetime, timedelta
 import random
 import pg8000
+import os
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Bot tokeni
 API_TOKEN = '8935181978:AAEPXusfIVG-z_ype7F1pZn_uKTUmwpJE8U'
 bot = telebot.TeleBot(API_TOKEN)
 
-# Sizning to'liq va to'g'rilangan baza ma'lumotlaringiz
+# Baza ma'lumotlari
 DB_USER = "baraban_baza_user"
 DB_PASS = "ynIn8Lmdg5IhvIschwTWB0HcopjhHcl3"
 DB_HOST = "dpg-d95u5jojs32c738e5uig-a.oregon-postgres.render.com"
 DB_NAME = "baraban_baza"
+
+# Render uchun soxta Web Server (Render port so'rab o'chiravermasligi uchun)
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Bot is alive!")
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    print(f"Health check server {port}-portda ishlamoqda...")
+    server.serve_forever()
 
 def get_db_connection():
     return pg8000.connect(
@@ -52,7 +69,7 @@ def init_db():
     cursor.close()
     conn.close()
 
-COOLDOWN_HOURS = 720
+COOLDOWN_HOURS = 24
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -113,19 +130,19 @@ def handle_web_app_data(message):
     
     conn.commit()
     
-    cursor.execute('SELECT COUNT(*) FROM available_numbers')
-    if cursor.fetchone()[0] == 0:
-        for i in range(1, 15):
-            cursor.execute('INSERT INTO available_numbers (num) VALUES (%s)', (i,))
-        conn.commit()
-        bot.send_message(message.chat.id, "📢 Diqqat! Hamma 14 ta raqam tarqatib bo'lindi. O'yin avtomatik ravishda yangidan boshlandi!")
-
     cursor.close()
     conn.close()
     
     bot.send_message(message.chat.id, f"🎉 Tabriklaymiz! Sizga mutlaqo noyob bo'lgan **{chiqqan_son}** raqami tushdi!")
 
 if __name__ == '__main__':
+    # Bazani tayyorlash
     init_db()
+    
+    # Render port yopib qo'ymasligi uchun serverni alohida oqimda yoqamiz
+    server_thread = Thread(target=run_health_server)
+    server_thread.daemon = True
+    server_thread.start()
+    
     print("Bot muvaffaqiyatli ishga tushdi...")
     bot.polling(none_stop=True)
