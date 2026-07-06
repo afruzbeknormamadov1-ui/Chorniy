@@ -1,20 +1,54 @@
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from datetime import datetime, timedelta
+import os
+import random
+import psycopg2
 
-# Siz bergan faol Telegram bot tokeni
+# Bot tokeni
 API_TOKEN = '8935181978:AAEPXusfIVG-z_ype7F1pZn_uKTUmwpJE8U'
 bot = telebot.TeleBot(API_TOKEN)
 
-# Foydalanuvchilar vaqtini eslab qolish uchun lug'at
-user_cooldowns = {}
+# Render'dagi Postgres Baza havolasi (Buni Render'dan olib joylaymiz)
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# Cheklov vaqti: 720 soat
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
+
+# Bazani yaratish va tekshirish
+def init_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # Foydalanuvchilar vaqti uchun jadval
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_spins (
+            user_id BIGINT PRIMARY KEY,
+            last_spin_time TIMESTAMP
+        )
+    ''')
+    # Qolgan raqamlar jadvali
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS available_numbers (
+            num INT PRIMARY KEY
+        )
+    ''')
+    conn.commit()
+    
+    # Agar raqamlar bazasi bo'sh bo'lsa, 1 dan 14 gacha to'ldiramiz
+    cursor.execute('SELECT COUNT(*) FROM available_numbers')
+    if cursor.fetchone()[0] == 0:
+        for i in range(1, 15):
+            cursor.execute('INSERT INTO available_numbers (num) VALUES (%s) ON CONFLICT DO NOTHING', (i,))
+        conn.commit()
+    
+    cursor.close()
+    conn.close()
+
+# 720 soatlik cheklov (soatda)
 COOLDOWN_HOURS = 720
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    # Render'dagi baraban sahifangiz havolasi tayyorlab qo'yildi
     web_app_url = "https://chorniy.onrender.com" 
     
     markup = ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
@@ -24,8 +58,8 @@ def send_welcome(message):
     
     bot.send_message(
         message.chat.id, 
-        f"Salom {message.from_user.first_name}! 1 dan 14 gacha sonlar bor omad barabaniga xush kelibsiz.\n"
-        f"Barabanni har {COOLDOWN_HOURS} soatda faqat 1 marta aylantira olasiz.", 
+        f"Salom {message.from_user.first_name}! Noyob raqamlar barabaniga xush kelibsiz.\n"
+        f"Har bir odamga faqat bitta takrorlanmas raqam tushadi. Har {COOLDOWN_HOURS} soatda 1 marta o'ynash mumkin.", 
         reply_markup=markup
     )
 
@@ -34,33 +68,65 @@ def handle_web_app_data(message):
     user_id = message.from_user.id
     current_time = datetime.now()
     
-    # Vaqt cheklovini tekshirish
-    if user_id in user_cooldowns:
-        last_spin = user_cooldowns[user_id]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # 1. Vaqtni tekshirish
+    cursor.execute('SELECT last_spin_time FROM user_spins WHERE user_id = %s', (user_id,))
+    row = cursor.fetchone()
+    if row:
+        last_spin = row[0]
         next_spin_time = last_spin + timedelta(hours=COOLDOWN_HOURS)
-        
         if current_time < next_spin_time:
             remaining_time = next_spin_time - current_time
             hours, remainder = divmod(remaining_time.seconds, 3600)
             minutes, _ = divmod(remainder, 60)
-            
-            bot.send_message(
-                message.chat.id, 
-                f"❌ Bugun barabanni aylantirib bo'ldingiz!\n"
-                f"Keyingi urinishgacha: {hours} soat-u {minutes} daqiqa kutishingiz kerak."
-            )
+            bot.send_message(message.chat.id, f"❌ Bugun aylantirib bo'ldingiz! Keyingi urinishgacha: {hours} soat {minutes} daqiqa bor.")
+            cursor.close()
+            conn.close()
             return
 
-    # Agar vaqt to'g'ri bo'lsa, barabandan qaytgan sonni qabul qilamiz
-    chiqqan_son = message.web_app_data.data
-    user_cooldowns[user_id] = current_time # Oxirgi aylantirgan vaqtini saqlaymiz
+    # 2. Qolgan raqamlarni olish
+    cursor.execute('SELECT num FROM available_numbers')
+    numbers = [r[0] for r in cursor.fetchall()]
     
-    bot.send_message(
-        message.chat.id, 
-        f"🎉 Tabriklaymiz! Sizga **{chiqqan_son}** raqami chiqdi!\n\n"
-        f"Keyingi aylantirish imkoniyati {COOLDOWN_HOURS} soatdan keyin ochiladi."
-    )
+    if not numbers:
+        # Agar tasodifan tugab qolgan bo'lsa (qayta to'ldirish)
+        for i in range(1, 15):
+            cursor.execute('INSERT INTO available_numbers (num) VALUES (%s) ON CONFLICT DO NOTHING', (i,))
+        conn.commit()
+        cursor.execute('SELECT num FROM available_numbers')
+        numbers = [r[0] for r in cursor.fetchall()]
+
+    # 3. Tasodifiy bitta raqamni tanlash (Barabandan nima chiqishidan qat'iy nazar, bazadagi bor raqam beriladi)
+    chiqqan_son = random.choice(numbers)
+    
+    # 4. Tanlangan raqamni bazadan o'chirish
+    cursor.execute('DELETE FROM available_numbers WHERE num = %s', (chiqqan_son,))
+    
+    # 5. Foydalanuvchi vaqtini yangilash
+    cursor.execute('''
+        INSERT INTO user_spins (user_id, last_spin_time) 
+        VALUES (%s, %s) 
+        ON CONFLICT (user_id) DO UPDATE SET last_spin_time = EXCLUDED.last_spin_time
+    ''', (user_id, current_time))
+    
+    conn.commit()
+    
+    # 6. Agar hamma raqam tugagan bo'lsa, keyingi safar uchun bazani yana 1-14 qilib to'ldirib qo'yamiz
+    cursor.execute('SELECT COUNT(*) FROM available_numbers')
+    if cursor.fetchone()[0] == 0:
+        for i in range(1, 15):
+            cursor.execute('INSERT INTO available_numbers (num) VALUES (%s)', (i,))
+        conn.commit()
+        bot.send_message(message.chat.id, "📢 Diqqat! Hamma 14 ta raqam tarqatib bo'lindi. O'yin yangidan boshlandi!")
+
+    cursor.close()
+    conn.close()
+    
+    bot.send_message(message.chat.id, f"🎉 Tabriklaymiz! Sizga mutlaqo noyob bo'lgan **{chiqqan_son}** raqami tushdi!")
 
 if __name__ == '__main__':
+    init_db()
     print("Bot ishga tushdi...")
     bot.polling(none_stop=True)
