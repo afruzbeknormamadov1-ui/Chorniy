@@ -1,24 +1,35 @@
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from datetime import datetime, timedelta
-import os
 import random
-import psycopg2
+import pg8000
 
 # Bot tokeni
 API_TOKEN = '8935181978:AAEPXusfIVG-z_ype7F1pZn_uKTUmwpJE8U'
 bot = telebot.TeleBot(API_TOKEN)
 
-# Sizning Render'dagi Postgres baza havolangiz (To'g'ridan-to'g'ri kod ichiga ulandi)
-DATABASE_URL = "postgresql://baraban_baza_user:ynIn8Lmdg5IhvIschwTWB0HBbNnO0eMh@dpg-d95u5jojs32c738e5uig-a.oregon-postgres.render.com/baraban_baza?sslmode=require"
+# Baza ma'lumotlari (Sizning parolingiz va host manzilingiz ulandi)
+DB_USER = "baraban_baza_user"
+DB_PASS = "ynIn8Lmdg5IhvIschwTWB0HBbNnO0eMh"
+DB_HOST = "dpg-d95u5jojs32c738e5uig-a.oregon-postgres.render.com"
+DB_NAME = "baraban_baza"
 
 def get_db_connection():
-    return psycopg2.connect(DATABASE_URL, sslmode='require')
+    # pg8000 orqali xavfsiz bog'lanish
+    return pg8000.connect(
+        user=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST,
+        database=DB_NAME,
+        port=5432,
+        ssl_context=True
+    )
 
 # Bazani yaratish va tekshirish
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
+    
     # Foydalanuvchilar vaqti uchun jadval
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_spins (
@@ -26,6 +37,7 @@ def init_db():
             last_spin_time TIMESTAMP
         )
     ''')
+    
     # Qolgan raqamlar jadvali
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS available_numbers (
@@ -36,7 +48,8 @@ def init_db():
     
     # Agar raqamlar bazasi bo'sh bo'lsa, 1 dan 14 gacha to'ldiramiz
     cursor.execute('SELECT COUNT(*) FROM available_numbers')
-    if cursor.fetchone()[0] == 0:
+    count = cursor.fetchone()[0]
+    if count == 0:
         for i in range(1, 15):
             cursor.execute('INSERT INTO available_numbers (num) VALUES (%s) ON CONFLICT DO NOTHING', (i,))
         conn.commit()
@@ -44,8 +57,8 @@ def init_db():
     cursor.close()
     conn.close()
 
-# 24 soatlik cheklov
-COOLDOWN_HOURS = 24
+# 720 soatlik cheklov
+COOLDOWN_HOURS = 720
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -91,7 +104,6 @@ def handle_web_app_data(message):
     numbers = [r[0] for r in cursor.fetchall()]
     
     if not numbers:
-        # Agar tasodifan tugab qolgan bo'lsa (qayta to'ldirish)
         for i in range(1, 15):
             cursor.execute('INSERT INTO available_numbers (num) VALUES (%s) ON CONFLICT DO NOTHING', (i,))
         conn.commit()
@@ -113,7 +125,7 @@ def handle_web_app_data(message):
     
     conn.commit()
     
-    # 6. Agar hamma raqam tugagan bo'lsa, keyingi safar uchun bazani yana 1-14 qilib to'ldirib qo'yamiz
+    # 6. Agar hamma raqam tugagan bo'lsa, keyingi safar uchun bazani qayta to'ldirish
     cursor.execute('SELECT COUNT(*) FROM available_numbers')
     if cursor.fetchone()[0] == 0:
         for i in range(1, 15):
