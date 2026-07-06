@@ -8,29 +8,34 @@ import pg8000
 API_TOKEN = '8935181978:AAEPXusfIVG-z_ype7F1pZn_uKTUmwpJE8U'
 bot = telebot.TeleBot(API_TOKEN)
 
-# Baza ma'lumotlari (Sizning parolingiz va host manzilingiz ulandi)
-DB_USER = "baraban_baza_user"
-DB_PASS = "ynIn8Lmdg5IhvIschwTWB0HBbNnO0eMh"
-DB_HOST = "dpg-d95u5jojs32c738e5uig-a.oregon-postgres.render.com"
-DB_NAME = "baraban_baza"
+# 🛑 DIQQAT: Pastdagi qo'shtirnoq ichiga hozirgina bazadan nusxalab olgan uzun havolangizni joylashtiring!
+DATABASE_URL = "BU_YERGA_NUSXALANGAN_EXTERNAL_URL_NI_QO_YING"
 
 def get_db_connection():
-    # pg8000 orqali xavfsiz bog'lanish
+    # Havolani pg8000 tushunadigan qismlarga ajratib olish
+    clean_url = DATABASE_URL.replace("postgresql://", "")
+    credentials, rest = clean_url.split("@")
+    db_user, db_pass = credentials.split(":")
+    
+    if "?" in rest:
+        rest = rest.split("?")[0]
+        
+    host_port, db_name = rest.split("/")
+    db_host, db_port = host_port.split(":")
+    
     return pg8000.connect(
-        user=DB_USER,
-        password=DB_PASS,
-        host=DB_HOST,
-        database=DB_NAME,
-        port=5432,
+        user=db_user,
+        password=db_pass,
+        host=db_host,
+        database=db_name,
+        port=int(db_port),
         ssl_context=True
     )
 
-# Bazani yaratish va tekshirish
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Foydalanuvchilar vaqti uchun jadval
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_spins (
             user_id BIGINT PRIMARY KEY,
@@ -38,7 +43,6 @@ def init_db():
         )
     ''')
     
-    # Qolgan raqamlar jadvali
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS available_numbers (
             num INT PRIMARY KEY
@@ -46,7 +50,6 @@ def init_db():
     ''')
     conn.commit()
     
-    # Agar raqamlar bazasi bo'sh bo'lsa, 1 dan 14 gacha to'ldiramiz
     cursor.execute('SELECT COUNT(*) FROM available_numbers')
     count = cursor.fetchone()[0]
     if count == 0:
@@ -57,8 +60,7 @@ def init_db():
     cursor.close()
     conn.close()
 
-# 720 soatlik cheklov
-COOLDOWN_HOURS = 720
+COOLDOWN_HOURS = 24
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -84,7 +86,6 @@ def handle_web_app_data(message):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # 1. Vaqtni tekshirish
     cursor.execute('SELECT last_spin_time FROM user_spins WHERE user_id = %s', (user_id,))
     row = cursor.fetchone()
     if row:
@@ -99,7 +100,6 @@ def handle_web_app_data(message):
             conn.close()
             return
 
-    # 2. Qolgan raqamlarni olish
     cursor.execute('SELECT num FROM available_numbers')
     numbers = [r[0] for r in cursor.fetchall()]
     
@@ -110,13 +110,9 @@ def handle_web_app_data(message):
         cursor.execute('SELECT num FROM available_numbers')
         numbers = [r[0] for r in cursor.fetchall()]
 
-    # 3. Tasodifiy bitta raqamni tanlash
     chiqqan_son = random.choice(numbers)
-    
-    # 4. Tanlangan raqamni bazadan o'chirish
     cursor.execute('DELETE FROM available_numbers WHERE num = %s', (chiqqan_son,))
     
-    # 5. Foydalanuvchi vaqtini yangilash
     cursor.execute('''
         INSERT INTO user_spins (user_id, last_spin_time) 
         VALUES (%s, %s) 
@@ -125,7 +121,6 @@ def handle_web_app_data(message):
     
     conn.commit()
     
-    # 6. Agar hamma raqam tugagan bo'lsa, keyingi safar uchun bazani qayta to'ldirish
     cursor.execute('SELECT COUNT(*) FROM available_numbers')
     if cursor.fetchone()[0] == 0:
         for i in range(1, 15):
