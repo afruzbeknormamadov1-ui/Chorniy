@@ -9,8 +9,8 @@ bot = telebot.TeleBot(API_TOKEN)
 # Foydalanuvchilar vaqtini eslab qolish uchun lug'at
 user_cooldowns = {}
 
-# Cheklov vaqti: 78 soat
-COOLDOWN_HOURS = 78 
+# Cheklov vaqti: 720 soat
+COOLDOWN_HOURS = 720
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
