@@ -8,27 +8,19 @@ import pg8000
 API_TOKEN = '8935181978:AAEPXusfIVG-z_ype7F1pZn_uKTUmwpJE8U'
 bot = telebot.TeleBot(API_TOKEN)
 
-# 🛑 DIQQAT: Pastdagi qo'shtirnoq ichiga hozirgina bazadan nusxalab olgan uzun havolangizni joylashtiring!
-DATABASE_URL = "BU_YERGA_NUSXALANGAN_EXTERNAL_URL_NI_QO_YING"
+# Sizning to'liq va to'g'rilangan baza ma'lumotlaringiz
+DB_USER = "baraban_baza_user"
+DB_PASS = "ynIn8Lmdg5IhvIschwTWB0HcopjhHcl3"
+DB_HOST = "dpg-d95u5jojs32c738e5uig-a.oregon-postgres.render.com"
+DB_NAME = "baraban_baza"
 
 def get_db_connection():
-    # Havolani pg8000 tushunadigan qismlarga ajratib olish
-    clean_url = DATABASE_URL.replace("postgresql://", "")
-    credentials, rest = clean_url.split("@")
-    db_user, db_pass = credentials.split(":")
-    
-    if "?" in rest:
-        rest = rest.split("?")[0]
-        
-    host_port, db_name = rest.split("/")
-    db_host, db_port = host_port.split(":")
-    
     return pg8000.connect(
-        user=db_user,
-        password=db_pass,
-        host=db_host,
-        database=db_name,
-        port=int(db_port),
+        user=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST,
+        database=DB_NAME,
+        port=5432,
         ssl_context=True
     )
 
@@ -60,7 +52,7 @@ def init_db():
     cursor.close()
     conn.close()
 
-COOLDOWN_HOURS = 24
+COOLDOWN_HOURS = 720
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
