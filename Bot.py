@@ -6,17 +6,16 @@ from datetime import datetime, timedelta
 API_TOKEN = '8935181978:AAEPXusfIVG-z_ype7F1pZn_uKTUmwpJE8U'
 bot = telebot.TeleBot(API_TOKEN)
 
-# Foydalanuvchilar vaqtini vaqtincha eslab qolish uchun lug'at
+# Foydalanuvchilar vaqtini eslab qolish uchun lug'at
 user_cooldowns = {}
 
-# Cheklov vaqti: 24 soat
-COOLDOWN_HOURS = 24 
+# Cheklov vaqti: 78 soat
+COOLDOWN_HOURS = 78 
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    # DIQQAT: Render'da Static Site yaratganingizdan keyin beriladigan
-    # https://...onrender.com havolasini pastdagi qo'shtirnoq ichiga yozasiz!
-    web_app_url = "https://SIZNING-STATIC-SAYTINGIZ.onrender.com" 
+    # Render'dagi baraban sahifangiz havolasi tayyorlab qo'yildi
+    web_app_url = "https://chorniy.onrender.com" 
     
     markup = ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     web_app_info = WebAppInfo(url=web_app_url)
